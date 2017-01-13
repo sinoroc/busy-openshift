@@ -1,0 +1,348 @@
+apiVersion: v1
+kind: Template
+metadata:
+    name: busy
+    annotations:
+        description: Template for busy busy
+labels:
+    app: busy
+
+
+
+parameters:
+  - name: NAMESPACE
+    description: "Project namespace"
+    required: true
+  - name: DOMAIN
+    description: "Openshift domain"
+    required: true
+
+
+objects:
+
+
+
+  - apiVersion: v1
+    kind: Route
+    metadata:
+        name: frontend
+    spec:
+        to:
+            kind: Service
+            name: frontend
+  - apiVersion: v1
+    kind: Service
+    metadata:
+        name: frontend
+    spec:
+        selector:
+            name: frontend
+        ports:
+          - port: 6543
+            protocol: TCP
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+        name: frontend
+    spec:
+        replicas: 1
+        selector:
+            name: frontend
+        template:
+            metadata:
+                name: frontend
+                labels:
+                    name: frontend
+                    app: busy
+            spec:
+                containers:
+                  - name: frontend
+                    image: frontend
+                    env:
+                      - name: BACKEND_URL
+                        value: http://backend-${NAMESPACE}.${DOMAIN}
+        strategy:
+            type: Recreate
+        triggers:
+          - type: ConfigChange
+          - type: ImageChange
+            imageChangeParams:
+                automatic: true
+                containerNames:
+                  - frontend
+                from:
+                    kind: ImageStreamTag
+                    name: frontend:latest
+  - apiVersion: v1
+    kind: BuildConfig
+    metadata:
+        name: frontend
+    spec:
+        source:
+            type: Git
+            git:
+                uri: https://github.com/sinoroc/busy-frontend
+        strategy:
+            type: Docker
+        output:
+            to:
+                kind: ImageStreamTag
+                name: frontend:latest
+        resources: {}
+  - apiVersion: v1
+    kind: ImageStream
+    metadata:
+        name: frontend
+    spec: {}
+
+
+
+
+
+  - apiVersion: v1
+    kind: Route
+    metadata:
+        name: backend
+    spec:
+        to:
+            kind: Service
+            name: backend
+  - apiVersion: v1
+    kind: Service
+    metadata:
+        name: backend
+    spec:
+        selector:
+            name: backend
+        ports:
+          - port: 6543
+            protocol: TCP
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+        name: backend
+    spec:
+        replicas: 1
+        selector:
+            name: backend
+        template:
+            metadata:
+                name: backend
+                labels:
+                    name: backend
+                    app: busy
+            spec:
+                containers:
+                  - name: backend
+                    image: backend
+                    env:
+                      - name: CELERY_BROKER_URL
+                        value: amqp://guest@rabbit
+        strategy:
+            type: Recreate
+        triggers:
+          - type: ConfigChange
+          - type: ImageChange
+            imageChangeParams:
+                automatic: true
+                containerNames:
+                  - backend
+                from:
+                    kind: ImageStreamTag
+                    name: backend:latest
+  - apiVersion: v1
+    kind: BuildConfig
+    metadata:
+        name: backend
+    spec:
+        source:
+            type: Git
+            git:
+                uri: https://github.com/sinoroc/busy-backend
+        strategy:
+            type: Docker
+        output:
+            to:
+                kind: ImageStreamTag
+                name: backend:latest
+        resources: {}
+  - apiVersion: v1
+    kind: ImageStream
+    metadata:
+        name: backend
+    spec: {}
+
+
+
+
+
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+        name: business
+        deploymentconfig: business
+    spec:
+        replicas: 2
+        selector:
+            deploymentconfig: business
+        template:
+            metadata:
+                labels:
+                    app: busy
+                    deploymentconfig: business
+            spec:
+                containers:
+                    - name: business
+                      image: business
+        strategy:
+            type: Recreate
+        triggers:
+          - type: ConfigChange
+          - type: ImageChange
+            imageChangeParams:
+                automatic: true
+                containerNames:
+                  - business
+                from:
+                    kind: ImageStreamTag
+                    name: business:latest
+  - apiVersion: v1
+    kind: BuildConfig
+    metadata:
+        name: business
+    spec:
+        source:
+            type: Git
+            git:
+                uri: https://github.com/sinoroc/busy-business
+        strategy:
+            type: Docker
+            dockerStrategy: {}
+        output:
+            to:
+                kind: ImageStreamTag
+                name: business:latest
+        resources: {}
+  - apiVersion: v1
+    kind: ImageStream
+    metadata:
+        name: business
+    spec: {}
+
+
+
+
+
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+        name: rabbit
+    spec:
+        selector:
+            name: rabbit
+        ports:
+          - port: 5672
+            protocol: TCP
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+        name: rabbit
+    spec:
+        replicas: 1
+        selector:
+            name: rabbit
+        template:
+            metadata:
+                name: rabbit
+                labels:
+                    name: rabbit
+                    app: busy
+            spec:
+                containers:
+                  - name: rabbit
+                    image: library/rabbitmq
+                    imagePullPolicy: IfNotPresent
+                    securityContext:
+                        capabilities: {}
+                        privileged: false
+                    resources: {}
+        strategy:
+            type: Recreate
+        triggers:
+          - type: ConfigChange
+          - type: ImageChange
+            imageChangeParams:
+                automatic: true
+                containerNames:
+                    - rabbit
+                from:
+                    kind: ImageStreamTag
+                    name: rabbitmq:3.5.5
+  - apiVersion: v1
+    kind: ImageStream
+    metadata:
+        name: rabbitmq
+    spec:
+        dockerImageRepository: library/rabbitmq:3.5.5
+
+
+
+
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+        name: redis
+    spec:
+        selector:
+            name: redis
+        ports:
+          - port: 6379
+            protocol: TCP
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+        name: redis
+    spec:
+        replicas: 1
+        selector:
+            name: redis
+        template:
+            metadata:
+                name: redis
+                labels:
+                    name: redis
+                    app: busy
+            spec:
+                containers:
+                  - name: redis
+                    image: library/redis
+                    imagePullPolicy: IfNotPresent
+                    securityContext:
+                        capabilities: {}
+                        privileged: false
+                    resources: {}
+        strategy:
+            type: Recreate
+        triggers:
+          - type: ConfigChange
+          - type: ImageChange
+            imageChangeParams:
+                automatic: true
+                containerNames:
+                    - redis
+                from:
+                    kind: ImageStreamTag
+                    name: redis:3.0.4
+  - apiVersion: v1
+    kind: ImageStream
+    metadata:
+        name: redis
+    spec:
+        dockerImageRepository: library/redis:3.0.4
+
+
+
+
+# EOF
